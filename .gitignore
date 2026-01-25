@@ -21,7 +21,17 @@ __pycache__/
 # Outputs generados
 # =====================
 outputs/**
-!outputs/.gitkeep
+
+# Permitir estructura de carpetas
+!outputs/figures/
+!outputs/maps/
+!outputs/reports/
+
+# Permitir archivos marcador
+!outputs/figures/.gitkeep
+!outputs/maps/.gitkeep
+!outputs/reports/.gitkeep
+
 
 # =====================
 # GIS formatos pesados
