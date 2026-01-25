@@ -1,207 +1,255 @@
-import os
+import argparse
 import requests
+import geopandas as gpd
+import osmnx as ox
 import zipfile
 import io
 import shutil
 import gdown
-import osmnx as ox
-import geopandas as gpd
-from pathlib import Path
+import unicodedata
+import json
 import warnings
+from pathlib import Path
+from tqdm import tqdm
 
 # Ignorar advertencias
 warnings.filterwarnings("ignore")
 
 # ==============================================================================
-# CONFIGURACIÓN
+# CONFIGURACIÓN GLOBAL
 # ==============================================================================
-COMUNA_OBJETIVO = "Viña del Mar"
-# Opción 1: Enlace directo IDE Chile
-URL_DIRECTA = "https://www.geoportal.cl/geoportal/catalog/download/912598ad-ac92-35f6-8045-098f214bd9c2"
-# Opción 2: Tu Carpeta en Google Drive (ID extraído de tu enlace)
-DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/10Gu5WlkQBlvkL25cpUQfOurOURu_MEov?usp=sharing"
+COMUNA_OBJETIVO = "VIÑA DEL MAR"
+
+# URLs
+URL_DPA_DIRECTA = "https://www.geoportal.cl/geoportal/catalog/download/912598ad-ac92-35f6-8045-098f214bd9c2"
+URL_DPA_DRIVE = "https://drive.google.com/drive/folders/10Gu5WlkQBlvkL25cpUQfOurOURu_MEov?usp=sharing"
+URL_CENSO_API = "https://services5.arcgis.com/hUyD8u3TeZLKPe4T/arcgis/rest/services/Manzana_2017_2/FeatureServer/0"
 
 # Rutas
-script_location = Path(__file__).parent.resolve()
-vector_dir = script_location.parent / "data" / "vector"
-temp_dir = vector_dir / "temp_download"
-output_file = vector_dir / "limite_comuna.gpkg"
+SCRIPT_DIR = Path(__file__).parent.resolve()
+VECTOR_DIR = SCRIPT_DIR.parent / "data" / "vector"
+TEMP_DIR = VECTOR_DIR / "temp_download"
 
-# Crear carpetas
-vector_dir.mkdir(parents=True, exist_ok=True)
-temp_dir.mkdir(parents=True, exist_ok=True)
-
-print(f"📍 Directorio de salida: {vector_dir}")
+# Crear carpetas necesarias (TEMP se crea aquí, se usa y se borra al final)
+VECTOR_DIR.mkdir(parents=True, exist_ok=True)
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 # ==============================================================================
-# LÓGICA DE PROCESAMIENTO (Común para Opción 1 y 2)
+# UTILIDADES
 # ==============================================================================
-def procesar_shapefile_descargado(directorio_busqueda):
-    """Busca el shapefile de comunas en el directorio y extrae Viña del Mar."""
-    print("   Consumer: Buscando shapefiles descargados...")
-    
-    # Buscar recursivamente cualquier archivo que parezca ser el de comunas
-    # Buscamos "COMUNA" o "comuna" en el nombre
-    shapefiles = list(directorio_busqueda.rglob("*OMUNA*.shp"))
-    
-    if not shapefiles:
-        # Si no encuentra por nombre, intenta buscar cualquier .shp
-        shapefiles = list(directorio_busqueda.rglob("*.shp"))
-    
-    if not shapefiles:
-        raise FileNotFoundError("No se encontraron archivos .shp en la descarga.")
+def normalize(text: str) -> str:
+    """Normaliza texto (quita tildes, mayúsculas)"""
+    if text is None: return ""
+    text = str(text)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return text.upper().strip()
 
-    archivo_shp = shapefiles[0]
-    print(f"   📖 Leyendo: {archivo_shp.name}")
-    
-    gdf = gpd.read_file(archivo_shp)
-    
-    # Identificar columna de nombre
-    columna_nombre = None
-    possible_cols = ["COMUNA", "Comuna", "NOM_COM", "NOM_COMUNA"]
-    for col in gdf.columns:
-        if col in possible_cols:
-            columna_nombre = col
-            break
+def cleanup_temp(force_create=False):
+    """
+    Limpia la carpeta temporal.
+    Si force_create=True, la recrea vacía (útil para limpiar ANTES de usar).
+    Si force_create=False, la elimina por completo (útil para limpiar AL FINAL).
+    """
+    try:
+        if TEMP_DIR.exists():
+            shutil.rmtree(TEMP_DIR)
+        
+        if force_create:
+            TEMP_DIR.mkdir(parents=True, exist_ok=True)
             
-    if not columna_nombre:
-        raise ValueError(f"No se encontró columna de nombre. Columnas: {gdf.columns.tolist()}")
-
-    # Filtrar Viña
-    print(f"   🔍 Filtrando '{COMUNA_OBJETIVO}'...")
-    gdf_vina = gdf[gdf[columna_nombre].astype(str).str.contains(COMUNA_OBJETIVO, case=False, na=False)]
-
-    if gdf_vina.empty:
-        raise ValueError(f"La comuna '{COMUNA_OBJETIVO}' no está en el archivo.")
-
-    # Reproyectar a UTM 19S
-    if gdf_vina.crs and gdf_vina.crs.to_string() != "EPSG:32719":
-        print("   🔄 Reproyectando a UTM 19S (EPSG:32719)...")
-        gdf_vina = gdf_vina.to_crs("EPSG:32719")
-
-    # Guardar
-    gdf_vina.to_file(output_file, driver="GPKG")
-    print(f"   ✨ ¡Éxito! Archivo guardado en: {output_file}")
-    return True
-
-# ==============================================================================
-# OPCIÓN 1: DESCARGA DIRECTA (IDE CHILE)
-# ==============================================================================
-def opcion_1_directa():
-    print("\n1️⃣  INTENTO 1: Descarga directa desde IDE Chile...")
-    try:
-        r = requests.get(URL_DIRECTA, stream=True, timeout=60) # Timeout de 60s
-        r.raise_for_status()
-        
-        print("   ⬇️  Descargando ZIP (esto puede tardar)...")
-        z = zipfile.ZipFile(io.BytesIO(r.content))
-        z.extractall(temp_dir)
-        print("   📦 Descompresión lista.")
-        
-        return procesar_shapefile_descargado(temp_dir)
-        
     except Exception as e:
-        print(f"   ❌ Falló Opción 1: {e}")
-        return False
+        print(f"⚠️ No se pudo manipular carpeta temp: {e}")
 
 # ==============================================================================
-# OPCIÓN 2: GOOGLE DRIVE (TU RESPALDO)
+# MÓDULO 1: LÍMITES COMUNALES (IDE / DRIVE / OSM)
 # ==============================================================================
-def opcion_2_drive():
-    print("\n2️⃣  INTENTO 2: Descarga desde Google Drive (Respaldo)...")
-    try:
-        # Limpiar temp por si acaso
-        for item in temp_dir.iterdir():
-            if item.is_dir(): shutil.rmtree(item)
-            else: item.unlink()
-            
-        print(f"   ⬇️  Descargando carpeta desde Drive...")
-        # Descarga la carpeta completa
-        gdown.download_folder(url=DRIVE_FOLDER_URL, output=str(temp_dir), quiet=False, use_cookies=False)
-        
-        # A veces descarga un ZIP dentro de la carpeta, o los archivos sueltos
-        # Si hay zips dentro, los descomprimimos
-        for zip_file in temp_dir.rglob("*.zip"):
-            print(f"   📦 Descomprimiendo zip interno: {zip_file.name}")
-            with zipfile.ZipFile(zip_file, 'r') as z:
-                z.extractall(temp_dir)
-        
-        return procesar_shapefile_descargado(temp_dir)
-
-    except Exception as e:
-        print(f"   ❌ Falló Opción 2: {e}")
-        return False
-
-# ==============================================================================
-# OPCIÓN 3: OPENSTREETMAP (FALLBACK FINAL)
-# ==============================================================================
-def opcion_3_osm():
-    print("\n3️⃣  INTENTO 3: Descarga desde OpenStreetMap (OSM)...")
-    try:
-        print(f"   🌍 Consultando API de OSM para '{COMUNA_OBJETIVO}'...")
-        gdf_boundary = ox.geocode_to_gdf(f"{COMUNA_OBJETIVO}, Chile")
-        
-        print("   🔄 Reproyectando a UTM 19S...")
-        gdf_boundary = gdf_boundary.to_crs("EPSG:32719")
-        
-        # Limpieza de columnas complejas
-        cols_to_drop = [c for c in gdf_boundary.columns if isinstance(gdf_boundary[c].iloc[0], list)]
-        gdf_boundary = gdf_boundary.drop(columns=cols_to_drop)
-
-        gdf_boundary.to_file(output_file, driver="GPKG")
-        print(f"   ✨ ¡Éxito! Límite (OSM) guardado en: {output_file}")
-        return True
-        
-    except Exception as e:
-        print(f"   ❌ Falló Opción 3: {e}")
-        return False
-
-# ==============================================================================
-# FUNCIÓN: RED VIAL (BONUS) - SIEMPRE SE EJECUTA
-# ==============================================================================
-def descargar_red_vial():
-    vial_file = vector_dir / "red_vial.geojson"
-    if vial_file.exists():
-        print("\n✅ Red vial ya existe. Saltando...")
+def download_limites():
+    output_file = VECTOR_DIR / "limite_comuna.gpkg"
+    if output_file.exists():
+        print("✅ [IDE] Límite comunal ya existe. Saltando...")
         return
 
-    print(f"\n🚗 Descargando Red Vial (Bonus) de OSM...")
+    print("\n🔵 Iniciando descarga de LÍMITES COMUNALES...")
+
+    # --- Lógica interna para procesar shapefiles ---
+    def procesar_shp(directorio):
+        shapefiles = list(directorio.rglob("*OMUNA*.shp")) or list(directorio.rglob("*.shp"))
+        if not shapefiles: raise FileNotFoundError("No hay .shp")
+        
+        shp = shapefiles[0]
+        print(f"   📖 Leyendo: {shp.name}")
+        gdf = gpd.read_file(shp)
+        
+        col_name = next((c for c in gdf.columns if c in ["COMUNA", "NOM_COM", "NOM_COMUNA"]), None)
+        if not col_name: raise ValueError("Columna de nombre no encontrada")
+        
+        print(f"   🔍 Filtrando '{COMUNA_OBJETIVO}'...")
+        gdf_vina = gdf[gdf[col_name].astype(str).str.contains(COMUNA_OBJETIVO, case=False, na=False)]
+        
+        if gdf_vina.empty: raise ValueError("Comuna no encontrada")
+        
+        if gdf_vina.crs.to_string() != "EPSG:32719":
+            print("   🔄 Reproyectando a UTM 19S...")
+            gdf_vina = gdf_vina.to_crs("EPSG:32719")
+            
+        gdf_vina.to_file(output_file, driver="GPKG")
+        print(f"   ✨ Guardado en: {output_file.name}")
+        return True
+
+    # --- Intento 1: Directo IDE (CON BARRA DE PROGRESO) ---
     try:
-        graph = ox.graph_from_place(f"{COMUNA_OBJETIVO}, Chile", network_type="drive")
-        gdf_nodes, gdf_edges = ox.graph_to_gdfs(graph)
-        gdf_edges.to_file(vial_file, driver="GeoJSON")
-        print(f"   ✨ Red vial guardada en: {vial_file}")
+        print("   1️⃣  Intento IDE Chile Directo...")
+        cleanup_temp(force_create=True) # Asegurar carpeta limpia y existente
+        zip_temp_path = TEMP_DIR / "dpa_temp.zip"
+        
+        r = requests.get(URL_DPA_DIRECTA, stream=True, timeout=60)
+        r.raise_for_status()
+        
+        total_size = int(r.headers.get('content-length', 0))
+        
+        with open(zip_temp_path, 'wb') as f, tqdm(
+            desc="   ⬇️  Descargando ZIP",
+            total=total_size,
+            unit='iB',
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for chunk in r.iter_content(chunk_size=8192):
+                size = f.write(chunk)
+                bar.update(size)
+
+        print("   📦 Descomprimiendo...")
+        with zipfile.ZipFile(zip_temp_path, 'r') as z:
+            z.extractall(TEMP_DIR)
+        
+        zip_temp_path.unlink()
+
+        if procesar_shp(TEMP_DIR): return
+
     except Exception as e:
-        print(f"   ❌ Error en red vial: {e}")
+        print(f"   ❌ Falló IDE Directo: {e}")
+
+    # --- Intento 2: Google Drive (CON BARRA DE PROGRESO NATIVA) ---
+    try:
+        print("   2️⃣  Intento Google Drive (Respaldo)...")
+        cleanup_temp(force_create=True) # Limpiar antes del intento 2
+        
+        gdown.download_folder(url=URL_DPA_DRIVE, output=str(TEMP_DIR), quiet=False, use_cookies=False)
+        
+        for z in TEMP_DIR.rglob("*.zip"):
+            with zipfile.ZipFile(z, 'r') as zf: zf.extractall(TEMP_DIR)
+            
+        if procesar_shp(TEMP_DIR): return
+    except Exception as e:
+        print(f"   ❌ Falló Drive: {e}")
+
+    # --- Intento 3: OSM (Fallback) ---
+    try:
+        print("   3️⃣  Intento OpenStreetMap (Fallback)...")
+        gdf = ox.geocode_to_gdf(f"{COMUNA_OBJETIVO}, Chile")
+        gdf = gdf.to_crs("EPSG:32719")
+        drop_cols = [c for c in gdf.columns if isinstance(gdf[c].iloc[0], list)]
+        gdf.drop(columns=drop_cols).to_file(output_file, driver="GPKG")
+        print(f"   ✨ Guardado (OSM) en: {output_file.name}")
+    except Exception as e:
+        print(f"   💥 FATAL: No se pudo descargar límites. Error: {e}")
 
 # ==============================================================================
-# EJECUCIÓN PRINCIPAL
+# MÓDULO 2: MANZANAS CENSALES (INE)
+# ==============================================================================
+def download_censo():
+    output_file = VECTOR_DIR / "manzanas_censales.shp"
+    if output_file.exists():
+        print("✅ [INE] Manzanas censales ya existen. Saltando...")
+        return
+
+    print("\n🔵 Iniciando descarga de MANZANAS CENSALES (INE)...")
+    
+    nombres = [COMUNA_OBJETIVO.upper(), normalize(COMUNA_OBJETIVO)]
+    
+    for nombre in nombres:
+        print(f"   🔍 Buscando '{nombre}' en API ArcGIS...")
+        params = {
+            "where": f"UPPER(COMUNA) LIKE '{nombre}%'",
+            "outFields": "*",
+            "returnGeometry": "true",
+            "f": "geojson",
+            "outSR": "4326"
+        }
+        
+        try:
+            r = requests.get(f"{URL_CENSO_API.rstrip('/')}/query", params=params, timeout=60)
+            if r.status_code != 200: continue
+            
+            data = r.json()
+            if data.get('features'):
+                count = len(data['features'])
+                print(f"   ✅ Encontradas {count} manzanas.")
+                
+                gdf = gpd.GeoDataFrame.from_features(data["features"])
+                gdf.set_crs(epsg=4326, inplace=True)
+                
+                print("   🔄 Reproyectando a UTM 19S...")
+                gdf = gdf.to_crs("EPSG:32719")
+                
+                gdf.to_file(output_file, driver="ESRI Shapefile")
+                print(f"   ✨ Guardado en: {output_file.name}")
+                return # Éxito
+        except Exception as e:
+            print(f"   ⚠️ Error parcial: {e}")
+            
+    print("   💥 FATAL: No se pudieron descargar manzanas.")
+
+# ==============================================================================
+# MÓDULO 3: RED VIAL (OSM)
+# ==============================================================================
+def download_red_vial():
+    output_file = VECTOR_DIR / "red_vial.geojson"
+    if output_file.exists():
+        print("✅ [OSM] Red vial ya existe. Saltando...")
+        return
+
+    print("\n🔵 Iniciando descarga de RED VIAL (OSM)...")
+    try:
+        print(f"   🚗 Descargando calles de '{COMUNA_OBJETIVO}'...")
+        graph = ox.graph_from_place(f"{COMUNA_OBJETIVO}, Chile", network_type="drive")
+        gdf_edges = ox.graph_to_gdfs(graph, nodes=False, edges=True)
+        gdf_edges.to_file(output_file, driver="GeoJSON")
+        print(f"   ✨ Guardado en: {output_file.name}")
+    except Exception as e:
+        print(f"   ❌ Error descargando red vial: {e}")
+
+
+# ==============================================================================
+# CONTROLADOR PRINCIPAL (ARGPARSE)
 # ==============================================================================
 if __name__ == "__main__":
-    exito = False
+    parser = argparse.ArgumentParser(description="Script unificado de descarga de vectores.")
     
-    # 1. Intentar IDE Chile
-    if not exito:
-        exito = opcion_1_directa()
+    parser.add_argument(
+        "--sources", 
+        type=str, 
+        default="all", 
+        help="Fuentes a descargar: 'all', 'ine' (censo), 'ide' (limites), 'osm' (vial)."
+    )
     
-    # 2. Intentar Drive
-    if not exito:
-        exito = opcion_2_drive()
+    args = parser.parse_args()
+    mode = args.sources.lower()
+    
+    print(f"🚀 Ejecutando descarga de vectores. Modo: {mode.upper()}")
+    print(f"📍 Directorio: {VECTOR_DIR}\n")
+    
+    # Lógica de banderas
+    if mode == "all" or mode == "ide":
+        download_limites()
         
-    # 3. Intentar OSM
-    if not exito:
-        exito = opcion_3_osm()
+    if mode == "all" or mode == "ine":
+        download_censo()
         
-    if not exito:
-        print("\n💥 FATAL: Todas las opciones fallaron. Revisa tu conexión.")
-    else:
-        # Limpieza final de temporales
-        try:
-            shutil.rmtree(temp_dir)
-        except:
-            pass
-            
-    # Siempre intentar bajar la red vial (es otro archivo)
-    descargar_red_vial()
-    
+    if mode == "all" or mode == "osm":
+        download_red_vial()
+        
+    # Limpieza final: Eliminar carpeta temp completamente
+    cleanup_temp(force_create=False)
     print("\n🏁 Proceso finalizado.")
