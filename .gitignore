@@ -1,0 +1,40 @@
+# =====================
+# Datos (NO versionar)
+# =====================
+data/raw/**
+data/processed/**
+data/vector/**
+
+# =====================
+# Cache
+# =====================
+cache/**
+__pycache__/
+.ipynb_checkpoints/
+
+# =====================
+# Outputs generados
+# =====================
+outputs/**
+
+# =====================
+# GIS formatos pesados
+# =====================
+*.tif
+*.tiff
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.geojson
+*.aux.xml
+*.ovr
+
+# =====================
+# Python / entorno
+# =====================
+.env
+.venv/
+*.pyc
