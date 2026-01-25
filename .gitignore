@@ -5,6 +5,11 @@ data/raw/**
 data/processed/**
 data/vector/**
 
+# PERMITIR archivos marcador
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/vector/.gitkeep
+
 # =====================
 # Cache
 # =====================
@@ -16,6 +21,7 @@ __pycache__/
 # Outputs generados
 # =====================
 outputs/**
+!outputs/.gitkeep
 
 # =====================
 # GIS formatos pesados
