@@ -11,6 +11,7 @@ import json
 import warnings
 from pathlib import Path
 from tqdm import tqdm
+from datetime import datetime
 
 # Ignorar advertencias
 warnings.filterwarnings("ignore")
@@ -29,16 +30,22 @@ URL_CENSO_API = "https://services5.arcgis.com/hUyD8u3TeZLKPe4T/arcgis/rest/servi
 SCRIPT_DIR = Path(__file__).parent.resolve()
 VECTOR_DIR = SCRIPT_DIR.parent / "data" / "vector"
 TEMP_DIR = VECTOR_DIR / "temp_download"
+METADATA_FILE = VECTOR_DIR / "metadata.txt"
 
-# Crear carpetas necesarias (TEMP se crea aquí, se usa y se borra al final)
+# Crear carpetas necesarias
 VECTOR_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+# Reiniciar metadatos
+with open(METADATA_FILE, "w", encoding="utf-8") as f:
+    f.write(f"METADATOS DE VECTORES\n")
+    f.write(f"Generado el: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    f.write("="*50 + "\n\n")
 
 # ==============================================================================
 # UTILIDADES
 # ==============================================================================
 def normalize(text: str) -> str:
-    """Normaliza texto (quita tildes, mayúsculas)"""
     if text is None: return ""
     text = str(text)
     text = unicodedata.normalize("NFKD", text)
@@ -46,33 +53,35 @@ def normalize(text: str) -> str:
     return text.upper().strip()
 
 def cleanup_temp(force_create=False):
-    """
-    Limpia la carpeta temporal.
-    Si force_create=True, la recrea vacía (útil para limpiar ANTES de usar).
-    Si force_create=False, la elimina por completo (útil para limpiar AL FINAL).
-    """
     try:
         if TEMP_DIR.exists():
             shutil.rmtree(TEMP_DIR)
-        
         if force_create:
             TEMP_DIR.mkdir(parents=True, exist_ok=True)
-            
     except Exception as e:
         print(f"⚠️ No se pudo manipular carpeta temp: {e}")
 
+def log_metadata(filename, source, description):
+    """Registra la info en metadata.txt"""
+    with open(METADATA_FILE, "a", encoding="utf-8") as f:
+        f.write(f"Archivo: {filename}\n")
+        f.write(f" - Fuente: {source}\n")
+        f.write(f" - Descripción: {description}\n")
+        f.write(f" - CRS: EPSG:32719 (WGS 84 / UTM zone 19S)\n")
+        f.write("-" * 30 + "\n")
+
 # ==============================================================================
-# MÓDULO 1: LÍMITES COMUNALES (IDE / DRIVE / OSM)
+# MÓDULO 1: LÍMITES COMUNALES
 # ==============================================================================
 def download_limites():
     output_file = VECTOR_DIR / "limite_comuna.gpkg"
     if output_file.exists():
         print("✅ [IDE] Límite comunal ya existe. Saltando...")
+        log_metadata("limite_comuna.gpkg", "IDE Chile / GeoPortal", "División Político Administrativa (DPA) 2020")
         return
 
     print("\n🔵 Iniciando descarga de LÍMITES COMUNALES...")
 
-    # --- Lógica interna para procesar shapefiles ---
     def procesar_shp(directorio):
         shapefiles = list(directorio.rglob("*OMUNA*.shp")) or list(directorio.rglob("*.shp"))
         if not shapefiles: raise FileNotFoundError("No hay .shp")
@@ -95,56 +104,45 @@ def download_limites():
             
         gdf_vina.to_file(output_file, driver="GPKG")
         print(f"   ✨ Guardado en: {output_file.name}")
+        log_metadata("limite_comuna.gpkg", "IDE Chile / GeoPortal", "División Político Administrativa (DPA) 2020")
         return True
 
-    # --- Intento 1: Directo IDE (CON BARRA DE PROGRESO) ---
+    # --- Intento 1: Directo IDE ---
     try:
         print("   1️⃣  Intento IDE Chile Directo...")
-        cleanup_temp(force_create=True) # Asegurar carpeta limpia y existente
+        cleanup_temp(force_create=True)
         zip_temp_path = TEMP_DIR / "dpa_temp.zip"
         
         r = requests.get(URL_DPA_DIRECTA, stream=True, timeout=60)
         r.raise_for_status()
-        
         total_size = int(r.headers.get('content-length', 0))
         
-        with open(zip_temp_path, 'wb') as f, tqdm(
-            desc="   ⬇️  Descargando ZIP",
-            total=total_size,
-            unit='iB',
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as bar:
+        with open(zip_temp_path, 'wb') as f, tqdm(total=total_size, unit='iB', unit_scale=True, desc="Descargando") as bar:
             for chunk in r.iter_content(chunk_size=8192):
                 size = f.write(chunk)
                 bar.update(size)
 
-        print("   📦 Descomprimiendo...")
         with zipfile.ZipFile(zip_temp_path, 'r') as z:
             z.extractall(TEMP_DIR)
         
         zip_temp_path.unlink()
-
         if procesar_shp(TEMP_DIR): return
 
     except Exception as e:
         print(f"   ❌ Falló IDE Directo: {e}")
 
-    # --- Intento 2: Google Drive (CON BARRA DE PROGRESO NATIVA) ---
+    # --- Intento 2: Google Drive ---
     try:
         print("   2️⃣  Intento Google Drive (Respaldo)...")
-        cleanup_temp(force_create=True) # Limpiar antes del intento 2
-        
+        cleanup_temp(force_create=True)
         gdown.download_folder(url=URL_DPA_DRIVE, output=str(TEMP_DIR), quiet=False, use_cookies=False)
-        
         for z in TEMP_DIR.rglob("*.zip"):
             with zipfile.ZipFile(z, 'r') as zf: zf.extractall(TEMP_DIR)
-            
         if procesar_shp(TEMP_DIR): return
     except Exception as e:
         print(f"   ❌ Falló Drive: {e}")
 
-    # --- Intento 3: OSM (Fallback) ---
+    # --- Intento 3: OSM ---
     try:
         print("   3️⃣  Intento OpenStreetMap (Fallback)...")
         gdf = ox.geocode_to_gdf(f"{COMUNA_OBJETIVO}, Chile")
@@ -152,20 +150,21 @@ def download_limites():
         drop_cols = [c for c in gdf.columns if isinstance(gdf[c].iloc[0], list)]
         gdf.drop(columns=drop_cols).to_file(output_file, driver="GPKG")
         print(f"   ✨ Guardado (OSM) en: {output_file.name}")
+        log_metadata("limite_comuna.gpkg", "OpenStreetMap", "Geocode Fallback")
     except Exception as e:
         print(f"   💥 FATAL: No se pudo descargar límites. Error: {e}")
 
 # ==============================================================================
-# MÓDULO 2: MANZANAS CENSALES (INE)
+# MÓDULO 2: MANZANAS CENSALES
 # ==============================================================================
 def download_censo():
     output_file = VECTOR_DIR / "manzanas_censales.shp"
     if output_file.exists():
         print("✅ [INE] Manzanas censales ya existen. Saltando...")
+        log_metadata("manzanas_censales.shp", "INE / API ArcGIS", "Censo 2017 - Manzanas")
         return
 
     print("\n🔵 Iniciando descarga de MANZANAS CENSALES (INE)...")
-    
     nombres = [COMUNA_OBJETIVO.upper(), normalize(COMUNA_OBJETIVO)]
     
     for nombre in nombres:
@@ -177,37 +176,33 @@ def download_censo():
             "f": "geojson",
             "outSR": "4326"
         }
-        
         try:
             r = requests.get(f"{URL_CENSO_API.rstrip('/')}/query", params=params, timeout=60)
             if r.status_code != 200: continue
-            
             data = r.json()
             if data.get('features'):
                 count = len(data['features'])
                 print(f"   ✅ Encontradas {count} manzanas.")
-                
                 gdf = gpd.GeoDataFrame.from_features(data["features"])
                 gdf.set_crs(epsg=4326, inplace=True)
-                
                 print("   🔄 Reproyectando a UTM 19S...")
                 gdf = gdf.to_crs("EPSG:32719")
-                
                 gdf.to_file(output_file, driver="ESRI Shapefile")
                 print(f"   ✨ Guardado en: {output_file.name}")
-                return # Éxito
+                log_metadata("manzanas_censales.shp", "INE / API ArcGIS", "Censo 2017 - Manzanas")
+                return
         except Exception as e:
             print(f"   ⚠️ Error parcial: {e}")
-            
     print("   💥 FATAL: No se pudieron descargar manzanas.")
 
 # ==============================================================================
-# MÓDULO 3: RED VIAL (OSM)
+# MÓDULO 3: RED VIAL
 # ==============================================================================
 def download_red_vial():
     output_file = VECTOR_DIR / "red_vial.geojson"
     if output_file.exists():
         print("✅ [OSM] Red vial ya existe. Saltando...")
+        log_metadata("red_vial.geojson", "OpenStreetMap (OSMnx)", "Red vial (drive)")
         return
 
     print("\n🔵 Iniciando descarga de RED VIAL (OSM)...")
@@ -215,41 +210,30 @@ def download_red_vial():
         print(f"   🚗 Descargando calles de '{COMUNA_OBJETIVO}'...")
         graph = ox.graph_from_place(f"{COMUNA_OBJETIVO}, Chile", network_type="drive")
         gdf_edges = ox.graph_to_gdfs(graph, nodes=False, edges=True)
+        # Aseguramos proyección UTM para metadata consistente
+        if gdf_edges.crs.to_string() != "EPSG:32719":
+             gdf_edges = gdf_edges.to_crs("EPSG:32719")
+             
         gdf_edges.to_file(output_file, driver="GeoJSON")
         print(f"   ✨ Guardado en: {output_file.name}")
+        log_metadata("red_vial.geojson", "OpenStreetMap (OSMnx)", "Red vial (drive)")
     except Exception as e:
         print(f"   ❌ Error descargando red vial: {e}")
 
-
 # ==============================================================================
-# CONTROLADOR PRINCIPAL (ARGPARSE)
+# MAIN
 # ==============================================================================
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Script unificado de descarga de vectores.")
-    
-    parser.add_argument(
-        "--sources", 
-        type=str, 
-        default="all", 
-        help="Fuentes a descargar: 'all', 'ine' (censo), 'ide' (limites), 'osm' (vial)."
-    )
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sources", type=str, default="all")
     args = parser.parse_args()
     mode = args.sources.lower()
     
     print(f"🚀 Ejecutando descarga de vectores. Modo: {mode.upper()}")
-    print(f"📍 Directorio: {VECTOR_DIR}\n")
     
-    # Lógica de banderas
-    if mode == "all" or mode == "ide":
-        download_limites()
+    if mode == "all" or mode == "ide": download_limites()
+    if mode == "all" or mode == "ine": download_censo()
+    if mode == "all" or mode == "osm": download_red_vial()
         
-    if mode == "all" or mode == "ine":
-        download_censo()
-        
-    if mode == "all" or mode == "osm":
-        download_red_vial()
-        
-    # Limpieza final: Eliminar carpeta temp completamente
     cleanup_temp(force_create=False)
-    print("\n🏁 Proceso finalizado.")
+    print(f"\n🏁 Proceso finalizado. Metadatos en: {METADATA_FILE}")
