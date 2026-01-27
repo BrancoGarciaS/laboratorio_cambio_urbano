@@ -1,3 +1,13 @@
+# =============================================================================
+# SCRIPT: download_vectors.py
+# =============================================================================
+# Descripción: Descarga y procesa datos vectoriales geoespaciales (shapefiles, geojson, gpkg)
+#              para la comuna objetivo (Viña del Mar). Incluye descarga desde APIs, OpenStreetMap y Google Drive.
+#              Este script registra los metadatos técnicos de los vectores descargados.
+#
+# Uso: python scripts/download_vectors.py
+# =============================================================================
+# Librerías
 import argparse        # Para manejar argumentos de línea de comandos para controlar el flujo del script
 import requests        # Para realizar solicitudes HTTP para descargar datos desde APIs y URLs
 import geopandas as gpd # Para procesar datos vectoriales geoespaciales (shapefile, geojson, gpkg)

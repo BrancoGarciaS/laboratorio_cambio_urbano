@@ -1,4 +1,14 @@
-# 1) IMPORTACIÓN DE LIBRERÍAS
+# =============================================================================
+# SCRIPT: download_sentinel.py
+# =============================================================================
+# Descripción: Descarga imágenes Sentinel-2 desde Google Earth Engine y las guarda localmente.
+#              Estas imágenes se utilizarán para calcular índices espectrales (NDVI, NDBI, NDWI, BSI).
+#              Este script también registra los metadatos técnicos de las imágenes descargadas.
+#
+# Uso: python scripts/download_sentinel.py
+# =============================================================================
+
+# 1) Importación de librerías
 import ee # Para conectarse con Google Earth Engine (API de Python) y acceder a imágenes satelitales (como Sentinel-2).
 import geemap # Para la descarga de imágenes EE en archivos locales.
 import os # Para el manejo de archivos.
