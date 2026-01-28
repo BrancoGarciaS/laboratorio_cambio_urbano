@@ -16,3 +16,7 @@ osmnx
 gdown
 geedim
 rasterstats
+folium
+streamlit-folium
+plotly
+pillow
