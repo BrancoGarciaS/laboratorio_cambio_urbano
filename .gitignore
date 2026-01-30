@@ -33,20 +33,6 @@ outputs/**
 !outputs/reports/.gitkeep
 
 # =====================
-# Excepciones para utils
-# =====================
-!app/utils/**
-
-# =====================
-# Permitir GIS en utils
-# =====================
-!app/utils/**/*.tif
-!app/utils/**/*.tiff
-!app/utils/**/*.gpkg
-!app/utils/**/*.shp
-!app/utils/**/*.geojson
-
-# =====================
 # GIS formatos pesados
 # =====================
 *.tif
@@ -67,3 +53,23 @@ outputs/**
 .env
 .venv/
 *.pyc
+
+# =====================
+# permitir TODO en utils
+# =====================
+!app/utils/**
+!app/utils/**/*
+
+# permitir formatos específicos en utils
+!app/utils/**/*.py
+!app/utils/**/*.tif
+!app/utils/**/*.tiff
+!app/utils/**/*.gpkg
+!app/utils/**/*.shp
+!app/utils/**/*.shx
+!app/utils/**/*.dbf
+!app/utils/**/*.prj
+!app/utils/**/*.cpg
+!app/utils/**/*.geojson
+!app/utils/**/*.aux.xml
+!app/utils/**/*.ovr
