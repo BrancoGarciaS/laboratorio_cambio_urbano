@@ -1,0 +1,19 @@
+METADATOS DE VECTORES
+Generado el: 2026-01-26 12:56:37
+==================================================
+
+Archivo: limite_comuna.gpkg
+ - Fuente: IDE Chile / GeoPortal
+ - Descripción: División Político Administrativa (DPA) 2020
+ - CRS: EPSG:32719 (WGS 84 / UTM zone 19S)
+------------------------------
+Archivo: manzanas_censales.shp
+ - Fuente: INE / API ArcGIS
+ - Descripción: Censo 2017 - Manzanas
+ - CRS: EPSG:32719 (WGS 84 / UTM zone 19S)
+------------------------------
+Archivo: red_vial.geojson
+ - Fuente: OpenStreetMap (OSMnx)
+ - Descripción: Red vial (drive)
+ - CRS: EPSG:32719 (WGS 84 / UTM zone 19S)
+------------------------------

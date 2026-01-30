@@ -37,6 +37,14 @@ outputs/**
 # =====================
 !app/utils/**
 
+# =====================
+# Permitir GIS en utils
+# =====================
+!app/utils/**/*.tif
+!app/utils/**/*.tiff
+!app/utils/**/*.gpkg
+!app/utils/**/*.shp
+!app/utils/**/*.geojson
 
 # =====================
 # GIS formatos pesados
