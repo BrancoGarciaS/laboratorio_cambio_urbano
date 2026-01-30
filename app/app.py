@@ -73,10 +73,10 @@ def cargar_datos():
     matriz_conf = pd.read_csv("app/utils/outputs/reports/03_matriz_confusion.csv")
     limite = gpd.read_file("app/utils/data/vector/limite_comuna.gpkg")
     red_vial = gpd.read_file("app/utils/data/vector/red_vial.geojson")
-    return cambios_zona, superficies, estadisticas, matriz_conf, limite, red_vial
+    manzanas_censales = gpd.read_file("app/utils/data/vector/manzanas_censales.shp")
+    return cambios_zona, superficies, estadisticas, matriz_conf, limite, red_vial, manzanas_censales
 
-cambios_zona, superficies, estadisticas, matriz_conf, limite, red_vial = cargar_datos()
-
+cambios_zona, superficies, estadisticas, matriz_conf, limite, red_vial, manzanas_censales = cargar_datos()
 
 # -------------------------------------------------
 # LAYOUT PRINCIPAL
@@ -135,6 +135,16 @@ with col1:
             "weight": 1
         }
     ).add_to(m)
+
+    folium.GeoJson(
+    manzanas_censales,
+    name="Manzanas censales",
+    style_function=lambda x: {
+        "fillColor": "#9D664A00",
+        "color": "red",
+        "weight": 0.5
+    }
+).add_to(m)
 
     folium.LayerControl().add_to(m)
     st_folium(m, height=500, width=800)
