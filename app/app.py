@@ -65,6 +65,11 @@ indice_sel = st.sidebar.selectbox(
     ["NDVI", "NDBI", "NDWI", "BSI"]
 )
 
+if anio_inicio > anio_fin:
+    st.warning("⚠️ El año inicial no puede ser mayor que el año final.")
+    st.stop()
+
+
 # -------------------------------------------------
 # CARGA DE DATOS
 # -------------------------------------------------
@@ -245,14 +250,20 @@ st.markdown(
 )
 
 
+sup_filt = superficies[
+    (superficies["Año"] >= anio_inicio) &
+    (superficies["Año"] <= anio_fin)
+]
+
 fig_sup = px.line(
-    superficies,
+    sup_filt,
     x="Año",
     y=["Urbano_Ha", "Veg_Densa_Ha", "Veg_Media_Ha"],
     markers=True,
     labels={"value": "Hectáreas"},
-    title="Evolución temporal de coberturas"
+    title=f"Evolución de coberturas ({anio_inicio}–{anio_fin})"
 )
+
 
 st.plotly_chart(fig_sup, use_container_width=True)
 
@@ -269,7 +280,12 @@ st.markdown(
     """
 )
 
-df_idx = estadisticas[estadisticas["Índice"] == indice_sel]
+df_idx = estadisticas[
+    (estadisticas["Índice"] == indice_sel) &
+    (estadisticas["Año"] >= anio_inicio) &
+    (estadisticas["Año"] <= anio_fin)
+]
+
 
 fig_idx = px.line(
     df_idx,
@@ -278,8 +294,9 @@ fig_idx = px.line(
     error_y="Std",
     markers=True,
     labels={"Media": indice_sel},
-    title=f"Evolución anual del {indice_sel}"
+    title=f"Evolución anual del {indice_sel} ({anio_inicio}–{anio_fin})"
 )
+
 
 st.plotly_chart(fig_idx, use_container_width=True)
 
