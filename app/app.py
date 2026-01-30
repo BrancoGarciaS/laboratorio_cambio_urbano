@@ -12,6 +12,8 @@ import os
 import base64
 from pathlib import Path
 
+
+
 # -------------------------------------------------
 # CONFIGURACIÓN GENERAL
 # -------------------------------------------------
@@ -84,7 +86,7 @@ def cargar_datos():
     # Archivos espaciales
     limite = gpd.read_file(vector_dir / "limite_comuna.gpkg")
     red_vial = gpd.read_file(vector_dir / "red_vial.geojson")
-    manzanas_censales = gpd.read_file(vector_dir / "manzanas_censales.shp")
+    manzanas_censales = gpd.read_file(vector_dir / "manzanas_censales.shp", engine="fiona")
 
     return cambios_zona, superficies, estadisticas, matriz_conf, limite, red_vial, manzanas_censales
 
