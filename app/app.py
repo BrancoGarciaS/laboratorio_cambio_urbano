@@ -10,6 +10,7 @@ from rasterio.plot import show
 from PIL import Image
 import os
 import base64
+from pathlib import Path
 
 # -------------------------------------------------
 # CONFIGURACIÓN GENERAL
@@ -67,16 +68,29 @@ indice_sel = st.sidebar.selectbox(
 # -------------------------------------------------
 @st.cache_data
 def cargar_datos():
-    cambios_zona = pd.read_csv("app/utils/outputs/reports/04_cambios_por_zona.csv")
-    superficies = pd.read_csv("app/utils/outputs/reports/02_superficies_clasificadas.csv")
-    estadisticas = pd.read_csv("app/utils/outputs/reports/02_estadisticas_anuales.csv")
-    matriz_conf = pd.read_csv("app/utils/outputs/reports/03_matriz_confusion.csv")
-    limite = gpd.read_file("app/utils/data/vector/limite_comuna.gpkg")
-    red_vial = gpd.read_file("app/utils/data/vector/red_vial.geojson")
-    manzanas_censales = gpd.read_file("app/utils/data/vector/manzanas_censales.shp")
+    # Carpeta base: el directorio donde está app.py
+    base_dir = Path(__file__).resolve().parent
+
+    # Construir rutas relativas de forma robusta
+    reports_dir = base_dir / "utils" / "outputs" / "reports"
+    vector_dir = base_dir / "utils" / "data" / "vector"
+
+    # CSVs
+    cambios_zona = pd.read_csv(reports_dir / "04_cambios_por_zona.csv")
+    superficies = pd.read_csv(reports_dir / "02_superficies_clasificadas.csv")
+    estadisticas = pd.read_csv(reports_dir / "02_estadisticas_anuales.csv")
+    matriz_conf = pd.read_csv(reports_dir / "03_matriz_confusion.csv")
+
+    # Archivos espaciales
+    limite = gpd.read_file(vector_dir / "limite_comuna.gpkg")
+    red_vial = gpd.read_file(vector_dir / "red_vial.geojson")
+    manzanas_censales = gpd.read_file(vector_dir / "manzanas_censales.shp")
+
     return cambios_zona, superficies, estadisticas, matriz_conf, limite, red_vial, manzanas_censales
 
+# Llamada
 cambios_zona, superficies, estadisticas, matriz_conf, limite, red_vial, manzanas_censales = cargar_datos()
+
 
 # -------------------------------------------------
 # LAYOUT PRINCIPAL
