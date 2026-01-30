@@ -32,6 +32,11 @@ outputs/**
 !outputs/maps/.gitkeep
 !outputs/reports/.gitkeep
 
+# =====================
+# Excepciones para utils
+# =====================
+!app/utils/**
+
 
 # =====================
 # GIS formatos pesados
