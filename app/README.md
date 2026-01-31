@@ -27,3 +27,29 @@ Ejecutar en la raíz del proyecto
 ```
 
 Esto abrirá en el navegador la aplicación de forma local.
+
+----
+
+## Streamlit Cloud
+El dashboard estará disponible en streamlit cloud para que pueda ser utilizada, accediendo al siguiente url:
+
+https://laboratoriocambiourbano-j42t7qv36xtuavrvq4claj.streamlit.app/
+
+Nota: La página puede tardar unos segundos en cargarse completamente.
+
+A continuación se muestran screenshot de la página.
+
+![Captura](app/utils/screenshot/parte1.png)
+
+![Captura](app/utils/screenshot/parte2.png)
+
+![Captura](app/utils/screenshot/parte3.png)
+
+![Captura](app/utils/screenshot/parte4.png)
+
+![Captura](app/utils/screenshot/parte5.png)
+
+![Captura](app/utils/screenshot/parte6.png)
+
+
+

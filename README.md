@@ -445,6 +445,11 @@ python scripts/detect_changes.py --t1 2019 --t2 2025 --method all
 streamlit run app/app.py
 ```
 
+## Streamlit Cloud
+El dashboard estará disponible en streamlit cloud para que pueda ser utilizada, accediendo al siguiente url:
+
+https://laboratoriocambiourbano-j42t7qv36xtuavrvq4claj.streamlit.app/
+
 ---
 
 ## Notebooks vs Scripts
